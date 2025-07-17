@@ -6,19 +6,15 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "audit": "npm audit",
-    "update": "npm update && npm audit"
+    "update": "npm update && npm audit",
+    "security-check": "npm audit --audit-level moderate",
+    "security-fix": "npm audit fix",
+    "preinstall": "echo 'Running security check...' && npm audit --audit-level high || echo 'Please review security issues'"
   },
   "devDependencies": {
     "wrangler": "^4.25.0"
   },
   "engines": {
     "node": ">=16.17.0"
-  }
-}
-{
-  "scripts": {
-    "security-check": "npm audit --audit-level moderate",
-    "security-fix": "npm audit fix",
-    "preinstall": "echo 'Running security check...' && npm audit --audit-level high || echo 'Please review security issues'"
   }
 }
