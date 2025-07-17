@@ -1,5 +1,5 @@
 {
-  "name": "blog",
+  "name": "lingering-field-c85b",
   "compatibility_date": "2024-07-01",
   "main": "./src/index.js",
   "kv_namespaces": [
@@ -7,6 +7,23 @@
       "binding": "BLOG_POSTS",
       "id": "cd7733da0eec4a10bfb1e070809060c8",
       "preview_id": "cd7733da0eec4a10bfb1e070809060c8"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "R2_BUCKET",
+      "bucket_name": "blog-images",
+      "preview_bucket_name": "blog-images-dev"
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "gillot.eu",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.gillot.eu",
+      "custom_domain": true
     }
   ]
 }
