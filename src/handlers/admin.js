@@ -1,5 +1,5 @@
 import { checkAdminAuth, generateSessionToken, validateSessionData } from '../utils/auth.js';
-import { getCookieSettings, getBlogTitle } from '../utils/domain.js';
+import { getCookieSettings } from '../utils/domain.js';
 import { getSecurityHeaders } from '../utils/security.js';
 import { 
   getDashboardTab, 
@@ -22,20 +22,11 @@ export async function handleAdminPanel(request, env) {
   
   let content = '';
   switch (tab) {
-    case 'dashboard':
-      content = getDashboardTab();
-      break;
-    case 'create':
-      content = getCreateTab();
-      break;
-    case 'edit':
-      content = getEditListTab();
-      break;
-    case 'debug':
-      content = getDebugTab();
-      break;
-    default:
-      content = getDashboardTab();
+    case 'dashboard': content = getDashboardTab(); break;
+    case 'create': content = getCreateTab(); break;
+    case 'edit': content = getEditListTab(); break;
+    case 'debug': content = getDebugTab(); break;
+    default: content = getDashboardTab();
   }
   
   return new Response(getAdminPage(request, tab, content), {
@@ -66,67 +57,7 @@ export async function handleAdminEditPost(request, env, path) {
 
 export async function handleAdminLogin(request, env) {
   if (request.method === 'POST') {
-    const formData = await request.formData();
-    const password = formData.get('password');
-
-    if (password === env.ADMIN_PANEL_PASSWORD) {
-      const sessionToken = generateSessionToken();
-      const userAgent = request.headers.get('User-Agent') || '';
-      const acceptLanguage = request.headers.get('Accept-Language') || '';
-      const acceptEncoding = request.headers.get('Accept-Encoding') || '';
-      
-      if (!userAgent) {
-        return new Response(getLoginPage(request, 'Browser verification failed'), {
-          headers: { 'Content-Type': 'text/html; charset=utf-8' }
-        });
-      }
-      
-      const browserFingerprint = Array.from(
-        new TextEncoder().encode(`${userAgent}|${acceptLanguage}|${acceptEncoding}`)
-      ).map(b => b.toString(16).padStart(2, '0')).join('');
-
-      const sessionData = {
-        created: new Date().toISOString(),
-        expires: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
-        browserFingerprint,
-        userAgent,
-        acceptLanguage,
-        acceptEncoding,
-        ipAddress: request.headers.get('CF-Connecting-IP') || 'unknown',
-        loginTime: new Date().toISOString()
-      };
-
-      if (!validateSessionData(sessionData)) {
-        return new Response(getLoginPage(request, 'Session creation failed'), {
-          headers: { 'Content-Type': 'text/html; charset=utf-8' }
-        });
-      }
-
-      await env.BLOG_POSTS.put(`session_${sessionToken}`, JSON.stringify(sessionData), { 
-        expirationTtl: 28800 
-      });
-
-      const cookieSettings = getCookieSettings(request);
-      const cookieParts = [
-        `admin_session=${sessionToken}`,
-        'HttpOnly',
-        cookieSettings.secure ? 'Secure' : '',
-        `SameSite=${cookieSettings.sameSite}`,
-        `Path=${cookieSettings.path}`
-      ].filter(Boolean);
-
-      if (cookieSettings.domain) {
-        cookieParts.push(`Domain=${cookieSettings.domain}`);
-      }
-
-      return Response.redirect('/verysecretadminpanel', 302, {
-        'Set-Cookie': cookieParts.join('; ')
-      });
-    } else {
-      return new Response(getLoginPage(request, 'Invalid password'), {
-        headers: { 'Content-Type': 'text/html; charset=utf-8' }
-      });
-    }
+    return handleLoginSubmission(request, env);
   }
 
   return new Response(getLoginPage(request), {
@@ -143,12 +74,10 @@ export async function handleAdminLogout(request, env) {
 
   const cookieSettings = getCookieSettings(request);
   const cookieParts = [
-    'admin_session=',
-    'HttpOnly',
+    'admin_session=', 'HttpOnly',
     cookieSettings.secure ? 'Secure' : '',
     `SameSite=${cookieSettings.sameSite}`,
-    'Max-Age=0',
-    `Path=${cookieSettings.path}`
+    'Max-Age=0', `Path=${cookieSettings.path}`
   ].filter(Boolean);
 
   if (cookieSettings.domain) {
@@ -160,14 +89,67 @@ export async function handleAdminLogout(request, env) {
   });
 }
 
+async function handleLoginSubmission(request, env) {
+  const formData = await request.formData();
+  const password = formData.get('password');
+
+  if (password === env.ADMIN_PANEL_PASSWORD) {
+    const sessionToken = generateSessionToken();
+    const userAgent = request.headers.get('User-Agent') || '';
+    
+    if (!userAgent) {
+      return new Response(getLoginPage(request, 'Browser verification failed'), {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' }
+      });
+    }
+    
+    const sessionData = {
+      created: new Date().toISOString(),
+      expires: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
+      browserFingerprint: Array.from(new TextEncoder().encode(`${userAgent}|${request.headers.get('Accept-Language')}|${request.headers.get('Accept-Encoding')}`)).map(b => b.toString(16).padStart(2, '0')).join(''),
+      userAgent,
+      acceptLanguage: request.headers.get('Accept-Language') || '',
+      acceptEncoding: request.headers.get('Accept-Encoding') || '',
+      ipAddress: request.headers.get('CF-Connecting-IP') || 'unknown',
+      loginTime: new Date().toISOString()
+    };
+
+    if (!validateSessionData(sessionData)) {
+      return new Response(getLoginPage(request, 'Session creation failed'), {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' }
+      });
+    }
+
+    await env.BLOG_POSTS.put(`session_${sessionToken}`, JSON.stringify(sessionData), { expirationTtl: 28800 });
+
+    const cookieSettings = getCookieSettings(request);
+    const cookieParts = [
+      `admin_session=${sessionToken}`, 'HttpOnly',
+      cookieSettings.secure ? 'Secure' : '',
+      `SameSite=${cookieSettings.sameSite}`,
+      `Path=${cookieSettings.path}`
+    ].filter(Boolean);
+
+    if (cookieSettings.domain) {
+      cookieParts.push(`Domain=${cookieSettings.domain}`);
+    }
+
+    return Response.redirect('/verysecretadminpanel', 302, {
+      'Set-Cookie': cookieParts.join('; ')
+    });
+  } else {
+    return new Response(getLoginPage(request, 'Invalid password'), {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' }
+    });
+  }
+}
+
 function getLoginPage(request, error = null) {
-  const blogTitle = 'Admin Login'; // Can be made dynamic later
-  
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>${blogTitle}</title>
+  <title>Admin Login</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 400px; margin: 100px auto; padding: 20px; }
     .login-form { background: #f8f9fa; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -181,7 +163,7 @@ function getLoginPage(request, error = null) {
   </style>
 </head>
 <body>
-  <form class="login-form" method="POST" action="/admin/login">
+  <form class="login-form" method="POST" action="/verysecretadminpanel/login">
     <h1>🔐 Admin Login</h1>
     ${error ? `<div class="error">${error}</div>` : ''}
     <input type="password" name="password" placeholder="Password" required />
@@ -248,7 +230,7 @@ function getAdminPage(request, activeTab, content) {
 <body>
   <header>
     <h1><a href="/">Blog Admin</a></h1>
-    <a href="/admin/logout" class="logout-btn">Logout</a>
+    <a href="/verysecretadminpanel/logout" class="logout-btn">Logout</a>
   </header>
 
   <div class="tabs">
@@ -264,126 +246,7 @@ function getAdminPage(request, activeTab, content) {
   </div>
 
   <div id="status"></div>
-  <script>
-    function showStatus(message, type = '') {
-      const statusDiv = document.getElementById('status');
-      if (statusDiv) {
-        statusDiv.textContent = message;
-        statusDiv.className = type ? \`status \${type}\` : '';
-        setTimeout(() => { 
-          statusDiv.textContent = ''; 
-          statusDiv.className = ''; 
-        }, 5000);
-      }
-    }
-
-    function validateSession() {
-      const cookies = document.cookie.split(';').map(c => c.trim());
-      const adminSession = cookies.find(c => c.startsWith('admin_session='));
-      
-      if (!adminSession) {
-        showStatus('Session expired. Please login again.', 'warning');
-        setTimeout(() => {
-          window.location.href = '/verysecretadminpanel';
-        }, 2000);
-        return false;
-      }
-      
-      return true;
-    }
-
-    function handleApiError(response, defaultMessage) {
-      if (!response.ok) {
-        return response.json().then(data => {
-          throw new Error(data.error || defaultMessage);
-        });
-      }
-      return response.json();
-    }
-
-    function setupImageUpload(textareaId = 'content') {
-      const uploadBtn = document.getElementById('upload-image');
-      if (uploadBtn) {
-        uploadBtn.addEventListener('click', async () => {
-          const fileInput = document.getElementById('image-upload');
-          const file = fileInput.files[0];
-
-          if (!file) {
-            showStatus('Please select an image', 'error');
-            return;
-          }
-
-          if (file.size > 10 * 1024 * 1024) {
-            showStatus('File too large. Max 10MB.', 'error');
-            return;
-          }
-
-          const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
-          if (!allowedTypes.includes(file.type)) {
-            showStatus('Invalid file type.', 'error');
-            return;
-          }
-
-          showStatus('📤 Uploading...');
-
-          const formData = new FormData();
-          formData.append('image', file);
-
-          try {
-            const response = await fetch('/api/upload', { 
-              method: 'POST', 
-              body: formData,
-              credentials: 'include'
-            });
-            const result = await response.json();
-
-            if (result.url) {
-              showStatus('✅ Image uploaded!', 'success');
-              const textarea = document.getElementById(textareaId);
-              if (textarea) {
-                textarea.value += \`\\n<img src="\${result.url}" alt="" />\\n\`;
-              }
-            } else {
-              showStatus('❌ Upload failed: ' + (result.error || 'Unknown error'), 'error');
-            }
-          } catch (error) {
-            showStatus('❌ Upload error: ' + error.message, 'error');
-          }
-        });
-      }
-    }
-
-    function setupPreview(titleId = 'title', contentId = 'content') {
-      const previewBtn = document.getElementById('preview-btn');
-      if (previewBtn) {
-        previewBtn.addEventListener('click', () => {
-          const title = document.getElementById(titleId).value;
-          const content = document.getElementById(contentId).value;
-          
-          if (!title || !content) {
-            showStatus('Please fill in both title and content for preview', 'error');
-            return;
-          }
-          
-          const previewSection = document.getElementById('preview-section');
-          const previewContent = document.getElementById('preview-content');
-          
-          if (previewSection && previewContent) {
-            previewContent.innerHTML = \`
-              <h1>\${title}</h1>
-              <div style="color: #7f8c8d; font-size: 0.9em; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
-                Preview - \${new Date().toLocaleDateString()}
-              </div>
-              <div style="line-height: 1.6;">\${content}</div>
-            \`;
-            
-            previewSection.style.display = 'block';
-            previewSection.scrollIntoView({ behavior: 'smooth' });
-          }
-        });
-      }
-    }
-  </script>
+  <script src="/static/admin-utils.js"></script>
 </body>
 </html>`;
 }
