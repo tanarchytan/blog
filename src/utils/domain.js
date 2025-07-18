@@ -1,3 +1,5 @@
+import { getSettings, getBlogTitleForDomain } from './settings.js';
+
 /**
  * Extract domain information from request
  */
@@ -33,23 +35,44 @@ export function getCookieSettings(request) {
     sameSite: 'Strict',
     httpOnly: true,
     path: '/',
-    // Don't set domain for localhost/development
     domain: isDevelopment ? undefined : hostname
   };
 }
 
 /**
- * Generate blog title based on domain
+ * Generate blog title based on settings and domain - fully dynamic
  */
-export function getBlogTitle(request) {
+export async function getBlogTitle(request, env) {
   const { hostname } = getDomainInfo(request);
   
-  // You can customize this based on your domains
-  const domainTitles = {
-    'gillot.eu': 'Gillot Security Blog',
-    'localhost': 'My Blog (Dev)',
-    // Add more domains as needed
-  };
+  try {
+    const settings = await getSettings(env);
+    return getBlogTitleForDomain(settings, hostname);
+  } catch (error) {
+    console.error('Error getting blog title:', error);
+    // Dynamic fallback based on hostname instead of hardcoded
+    return `${hostname.charAt(0).toUpperCase() + hostname.slice(1)} Blog`;
+  }
+}
+
+/**
+ * Generate blog description based on settings and domain
+ */
+export async function getBlogDescription(request, env) {
+  const { hostname } = getDomainInfo(request);
   
-  return domainTitles[hostname] || `${hostname} Blog`;
+  try {
+    const settings = await getSettings(env);
+    return getBlogDescriptionForDomain(settings, hostname);
+  } catch (error) {
+    console.error('Error getting blog description:', error);
+    return 'A technology and cybersecurity blog'; // Generic fallback
+  }
+}
+
+/**
+ * Synchronous version for cases where env is not available
+ */
+export function getBlogTitleSync(hostname) {
+  return `${hostname.charAt(0).toUpperCase() + hostname.slice(1)} Blog`;
 }

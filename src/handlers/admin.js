@@ -1,7 +1,14 @@
 import { checkAdminAuth, generateSessionToken, validateSessionData } from '../utils/auth.js';
 import { getCookieSettings, getBlogTitle } from '../utils/domain.js';
 import { createTemplate } from '../utils/shared.js';
-import { getDashboardTab, getCreateTab, getEditListTab, getEditPostTab, getDebugTab } from './adminTabs.js';
+import { 
+  getDashboardTab, 
+  getCreateTab, 
+  getEditListTab, 
+  getEditPostTab,
+  getDebugTab,
+  getSettingsTab  // ADD THIS LINE
+} from './adminTabs.js';
 
 export async function handleAdminPanel(request, env) {
   const authResult = await checkAdminAuth(request, env);
@@ -89,16 +96,19 @@ function getTabContent(tab) {
   switch (tab) {
     case 'create': return getCreateTab();
     case 'edit': return getEditListTab();
+    case 'settings': return getSettingsTab();  // ADD THIS LINE
     case 'debug': return getDebugTab();
     default: return getDashboardTab();
   }
 }
+
 
 function getAdminLayout(activeTab, content) {
   const tabs = [
     { id: 'dashboard', name: 'Dashboard', icon: '📊' },
     { id: 'create', name: 'Create', icon: '📝' },
     { id: 'edit', name: 'Edit', icon: '✏️' },
+    { id: 'settings', name: 'Settings', icon: '⚙️' },  // ADD THIS LINE
     { id: 'debug', name: 'Debug', icon: '🔧' }
   ];
 

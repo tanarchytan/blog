@@ -1,135 +1,274 @@
-import { createTemplate } from '../utils/shared.js';
+// Add this to your adminTabs.js file
 
-const FORM_TEMPLATE = (title, isEdit, post = null) => `
-  <section class="admin-section">
-    <h2>${title}</h2>
-    ${isEdit ? `<div class="post-meta">Created: ${new Date(post.createdAt).toLocaleDateString()} | Slug: ${post.slug}</div>` : ''}
-    <form id="post-form" class="admin-form">
-      <input type="text" id="title" placeholder="Post title" value="${isEdit ? post.title.replace(/"/g, '&quot;') : ''}" required />
-      <textarea id="content" placeholder="Post content (HTML)" rows="15" required>${isEdit ? post.content.replace(/</g, '&lt;').replace(/>/g, '&gt;') : ''}</textarea>
-      <button type="button" id="preview-btn">Preview</button>
-      <button type="submit">${isEdit ? 'Update' : 'Create'} Post</button>
-    </form>
-  </section>
-  <section class="admin-section" id="preview-section" style="display: none;"><h2>📖 Preview</h2><div id="preview-content"></div></section>
-  <section class="admin-section"><h2>📤 Upload Image</h2><input type="file" id="image-upload" accept="image/*" /><button id="upload-image">Upload</button></section>
-  <script>
-    setupImageUpload('content'); setupPreview('title', 'content');
-    document.getElementById('post-form').addEventListener('submit', async (e) => {
-      e.preventDefault(); if (!validateSession()) return;
-      const title = document.getElementById('title').value, content = document.getElementById('content').value;
-      if (!title.trim() || !content.trim()) return showStatus('❌ Title and content required', 'error');
+export function getSettingsTab() {
+  return `
+    <div class="settings-container">
+      <h2>⚙️ Blog Settings</h2>
       
-      try {
-        const result = await apiRequest('${isEdit ? `/api/posts/\${post.slug}` : '/api/posts'}', {
-          method: '${isEdit ? 'PUT' : 'POST'}', body: JSON.stringify({ title, content })
-        });
-        showStatus('✅ Post ${isEdit ? 'updated' : 'created'}! Redirecting...', 'success');
-        setTimeout(() => location.href = '/verysecretadminpanel?tab=${isEdit ? 'edit' : 'dashboard'}', 1500);
-      } catch (error) { showStatus('❌ Error: ' + error.message, 'error'); }
-    });
-  </script>
-`;
+      <div class="settings-section">
+        <h3>📝 General Settings</h3>
+        <form id="general-settings" class="admin-form">
+          <label for="default-title">Default Blog Title</label>
+          <input type="text" id="default-title" name="defaultTitle" placeholder="My Blog" required />
+          
+          <label for="default-description">Default Description</label>
+          <textarea id="default-description" name="defaultDescription" placeholder="A cybersecurity and technology blog" rows="3"></textarea>
+          
+          <label for="default-author">Default Author</label>
+          <input type="text" id="default-author" name="defaultAuthor" placeholder="Blog Author" />
+          
+          <button type="submit" class="btn btn-primary">Save General Settings</button>
+        </form>
+      </div>
 
-export const getDashboardTab = () => `
-  <div class="dashboard-grid">
-    <div class="dashboard-card"><h3>📝 Content</h3><p>Manage posts</p><a href="?tab=create" class="btn btn-primary">Create</a><a href="?tab=edit" class="btn btn-info">Edit</a></div>
-    <div class="dashboard-card"><h3>📊 Stats</h3><p>Blog statistics</p><div id="stats-content">Loading...</div></div>
-    <div class="dashboard-card"><h3>🔧 Tools</h3><p>System tools</p><a href="?tab=debug" class="btn btn-success">Debug</a><button id="clear-sessions-btn" class="btn btn-warning">Clear Sessions</button></div>
-  </div>
-  <script>
-    fetch('/api/posts').then(r=>r.json()).then(posts=>{
-      document.getElementById('stats-content').innerHTML = posts.length ? \`<strong>Posts:</strong> \${posts.length}<br><strong>Latest:</strong> \${posts[0].title}\` : '<em>No posts</em>';
-    }).catch(()=>document.getElementById('stats-content').innerHTML='<em>Error</em>');
-    
-    document.getElementById('clear-sessions-btn').addEventListener('click', async () => {
-      if (!confirm('Clear all sessions?')) return;
-      try {
-        const result = await apiRequest('/api/debug/clear-sessions', {method: 'POST'});
-        showStatus(\`✅ Cleared \${result.cleared} sessions\`, 'success');
-      } catch (error) { showStatus('❌ Error: ' + error.message, 'error'); }
-    });
-  </script>
-`;
-
-export const getCreateTab = () => FORM_TEMPLATE('📝 Create Post', false);
-export const getEditPostTab = (post) => FORM_TEMPLATE('✏️ Edit Post', true, post);
-
-export const getEditListTab = () => `
-  <div class="posts-list"><h2>📝 Manage Posts</h2><div id="posts-container" class="loading">Loading...</div></div>
-  <script>
-    async function loadPosts() {
-      try {
-        const posts = await apiRequest('/api/posts');
-        const container = document.getElementById('posts-container');
-        container.innerHTML = posts.length ? posts.map(post => \`
-          <div class="post-item">
-            <h3>\${escapeHtml(post.title)}</h3>
-            <div class="post-meta">Published: \${new Date(post.createdAt).toLocaleDateString()} | \${post.slug}</div>
-            <div class="post-actions">
-              <a href="/verysecretadminpanel/edit/\${post.slug}" class="btn btn-primary">Edit</a>
-              <a href="/post/\${post.slug}" class="btn btn-success" target="_blank">View</a>
-              <button class="btn btn-danger" onclick="deletePost('\${post.slug}')">Delete</button>
-            </div>
+      <div class="settings-section">
+        <h3>🌐 Domain-Specific Settings</h3>
+        <div id="domain-settings">
+          <div class="domain-setting">
+            <input type="text" placeholder="Domain (e.g., gillot.eu)" class="domain-input" />
+            <input type="text" placeholder="Custom Title" class="domain-title" />
+            <input type="text" placeholder="Custom Description" class="domain-description" />
+            <button type="button" class="btn btn-success add-domain">Add Domain</button>
           </div>
-        \`).join('') : '<p>No posts. <a href="?tab=create">Create first post</a></p>';
-        container.className = '';
-      } catch (error) { document.getElementById('posts-container').innerHTML = '<p class="error">Error loading posts</p>'; }
-    }
-    
-    async function deletePost(slug) {
-      if (!confirm('Delete this post?') || !validateSession()) return;
-      try {
-        await apiRequest(\`/api/posts/\${slug}\`, {method: 'DELETE'});
-        showStatus('✅ Post deleted', 'success'); loadPosts();
-      } catch (error) { showStatus('❌ Error: ' + error.message, 'error'); }
-    }
-    loadPosts();
-  </script>
-`;
+        </div>
+        <div id="existing-domains"></div>
+        <button type="button" id="save-domain-settings" class="btn btn-primary">Save Domain Settings</button>
+      </div>
 
-export const getDebugTab = () => `
-  <div class="debug-section"><h3>🔧 System Test</h3><button id="test-btn" class="btn btn-success">Run Test</button><pre id="test-results"></pre></div>
-  <div class="debug-section"><h3>🔒 Security</h3><div id="security-info">Non-persistent Sessions: ✅<br>Browser Fingerprinting: ✅<br>Session Timeout: 8h</div></div>
-  <div class="debug-section"><h3>📊 Session</h3><div id="session-debug">Loading...</div></div>
-  <div class="debug-section"><h3>🍪 Cookies</h3><div id="cookie-debug">Loading...</div></div>
-  <div class="debug-section"><h3>🔄 Management</h3><button id="clear-debug" class="btn btn-warning">Clear Sessions</button><button id="refresh-debug" class="btn btn-info">Refresh</button></div>
-  <script>
-    document.getElementById('test-btn').addEventListener('click', async () => {
-      const resultsDiv = document.getElementById('test-results');
-      resultsDiv.textContent = 'Testing...';
-      try {
-        const result = await apiRequest('/api/test');
-        resultsDiv.textContent = result.success ? 
-          \`✅ System OK\\nKV: \${result.kvBinding?'✅':'❌'}\\nR2: \${result.r2Binding?'✅':'❌'}\\nSessions: \${result.security.activeSessions}\` :
-          \`❌ Test Failed: \${result.error}\`;
-      } catch (error) { resultsDiv.textContent = \`❌ Error: \${error.message}\`; }
-    });
-    
-    async function loadDebugInfo() {
-      try {
-        const session = await apiRequest('/api/debug/session');
-        document.getElementById('session-debug').innerHTML = \`Created: \${session.created}\\nExpires: \${session.expires}\\nIP: \${session.ipAddress}\`;
-      } catch (error) { document.getElementById('session-debug').innerHTML = 'Session info unavailable'; }
-      
-      const cookies = document.cookie.split(';').map(c => c.trim());
-      const adminSession = cookies.find(c => c.startsWith('admin_session='));
-      document.getElementById('cookie-debug').innerHTML = \`Session Cookie: \${adminSession ? 'Present' : '❌ NOT FOUND'}\\nTotal: \${cookies.length}\`;
-    }
-    
-    document.getElementById('clear-debug').addEventListener('click', async () => {
-      if (!confirm('Clear all sessions? You will be logged out.')) return;
-      try {
-        const result = await apiRequest('/api/debug/clear-sessions', {method: 'POST'});
-        showStatus(\`✅ Cleared \${result.cleared} sessions\`, 'success');
-        setTimeout(() => location.href = '/verysecretadminpanel', 3000);
-      } catch (error) { showStatus('❌ Error: ' + error.message, 'error'); }
-    });
-    
-    document.getElementById('refresh-debug').addEventListener('click', () => {
-      loadDebugInfo(); showStatus('🔄 Refreshed', 'info');
-    });
-    
-    loadDebugInfo();
-  </script>
-`;
+      <div class="settings-section">
+        <h3>🎨 Theme Settings</h3>
+        <form id="theme-settings" class="admin-form">
+          <label for="primary-color">Primary Color</label>
+          <input type="color" id="primary-color" name="primaryColor" value="#3498db" />
+          
+          <label for="accent-color">Accent Color</label>
+          <input type="color" id="accent-color" name="accentColor" value="#2c3e50" />
+          
+          <button type="submit" class="btn btn-primary">Save Theme Settings</button>
+        </form>
+      </div>
+
+      <div class="settings-section">
+        <h3>📱 Social Media</h3>
+        <form id="social-settings" class="admin-form">
+          <label for="twitter">Twitter URL</label>
+          <input type="url" id="twitter" name="twitter" placeholder="https://twitter.com/username" />
+          
+          <label for="linkedin">LinkedIn URL</label>
+          <input type="url" id="linkedin" name="linkedin" placeholder="https://linkedin.com/in/username" />
+          
+          <label for="github">GitHub URL</label>
+          <input type="url" id="github" name="github" placeholder="https://github.com/username" />
+          
+          <button type="submit" class="btn btn-primary">Save Social Settings</button>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      let currentSettings = {};
+
+      // Load current settings
+      async function loadSettings() {
+        try {
+          const response = await fetch('/api/settings');
+          currentSettings = await response.json();
+          populateSettings(currentSettings);
+        } catch (error) {
+          console.error('Error loading settings:', error);
+          showStatus('Error loading settings', 'error');
+        }
+      }
+
+      function populateSettings(settings) {
+        // Populate general settings
+        document.getElementById('default-title').value = settings.blog?.defaultTitle || '';
+        document.getElementById('default-description').value = settings.blog?.defaultDescription || '';
+        document.getElementById('default-author').value = settings.blog?.defaultAuthor || '';
+        
+        // Populate theme settings
+        document.getElementById('primary-color').value = settings.theme?.primaryColor || '#3498db';
+        document.getElementById('accent-color').value = settings.theme?.accentColor || '#2c3e50';
+        
+        // Populate social settings
+        document.getElementById('twitter').value = settings.social?.twitter || '';
+        document.getElementById('linkedin').value = settings.social?.linkedin || '';
+        document.getElementById('github').value = settings.social?.github || '';
+        
+        // Populate domain settings
+        populateDomainSettings(settings.domains || {});
+      }
+
+      function populateDomainSettings(domains) {
+        const container = document.getElementById('existing-domains');
+        container.innerHTML = '';
+        
+        Object.entries(domains).forEach(([domain, config]) => {
+          const domainDiv = document.createElement('div');
+          domainDiv.className = 'existing-domain-setting';
+          domainDiv.innerHTML = \`
+            <div class="domain-row">
+              <span class="domain-name">\${domain}</span>
+              <input type="text" value="\${config.title || ''}" class="domain-title-edit" placeholder="Custom Title" />
+              <input type="text" value="\${config.description || ''}" class="domain-description-edit" placeholder="Custom Description" />
+              <button type="button" class="btn btn-danger remove-domain" data-domain="\${domain}">Remove</button>
+            </div>
+          \`;
+          container.appendChild(domainDiv);
+        });
+        
+        // Add event listeners for remove buttons
+        document.querySelectorAll('.remove-domain').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const domain = e.target.dataset.domain;
+            delete currentSettings.domains[domain];
+            populateDomainSettings(currentSettings.domains);
+          });
+        });
+      }
+
+      // Form handlers
+      document.getElementById('general-settings').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        currentSettings.blog = {
+          defaultTitle: formData.get('defaultTitle'),
+          defaultDescription: formData.get('defaultDescription'),
+          defaultAuthor: formData.get('defaultAuthor')
+        };
+        
+        await saveSettings();
+      });
+
+      document.getElementById('theme-settings').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        currentSettings.theme = {
+          primaryColor: formData.get('primaryColor'),
+          accentColor: formData.get('accentColor')
+        };
+        
+        await saveSettings();
+      });
+
+      document.getElementById('social-settings').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        currentSettings.social = {
+          twitter: formData.get('twitter'),
+          linkedin: formData.get('linkedin'),
+          github: formData.get('github')
+        };
+        
+        await saveSettings();
+      });
+
+      // Domain settings handler
+      document.querySelector('.add-domain').addEventListener('click', () => {
+        const domain = document.querySelector('.domain-input').value.trim();
+        const title = document.querySelector('.domain-title').value.trim();
+        const description = document.querySelector('.domain-description').value.trim();
+        
+        if (domain) {
+          if (!currentSettings.domains) currentSettings.domains = {};
+          currentSettings.domains[domain] = { title, description };
+          
+          // Clear inputs
+          document.querySelector('.domain-input').value = '';
+          document.querySelector('.domain-title').value = '';
+          document.querySelector('.domain-description').value = '';
+          
+          populateDomainSettings(currentSettings.domains);
+        }
+      });
+
+      document.getElementById('save-domain-settings').addEventListener('click', async () => {
+        // Update domain settings from current form values
+        document.querySelectorAll('.existing-domain-setting').forEach(domainDiv => {
+          const domainName = domainDiv.querySelector('.domain-name').textContent;
+          const title = domainDiv.querySelector('.domain-title-edit').value;
+          const description = domainDiv.querySelector('.domain-description-edit').value;
+          
+          if (currentSettings.domains[domainName]) {
+            currentSettings.domains[domainName] = { title, description };
+          }
+        });
+        
+        await saveSettings();
+      });
+
+      async function saveSettings() {
+        try {
+          const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(currentSettings)
+          });
+          
+          const result = await response.json();
+          
+          if (result.success) {
+            showStatus('✅ Settings saved successfully!', 'success');
+          } else {
+            showStatus('❌ Failed to save settings: ' + result.error, 'error');
+          }
+        } catch (error) {
+          showStatus('❌ Error saving settings: ' + error.message, 'error');
+        }
+      }
+
+      // Load settings on page load
+      loadSettings();
+    </script>
+
+    <style>
+      .settings-container { max-width: 800px; }
+      .settings-section { 
+        background: #f8f9fa; 
+        padding: 20px; 
+        border-radius: 8px; 
+        margin-bottom: 20px; 
+      }
+      .settings-section h3 { 
+        margin-top: 0; 
+        color: #2c3e50; 
+        border-bottom: 2px solid #eee; 
+        padding-bottom: 10px; 
+      }
+      .admin-form label { 
+        display: block; 
+        margin-bottom: 5px; 
+        font-weight: bold; 
+        color: #2c3e50; 
+      }
+      .domain-setting, .domain-row { 
+        display: flex; 
+        gap: 10px; 
+        align-items: center; 
+        margin-bottom: 10px; 
+      }
+      .domain-input, .domain-title, .domain-description,
+      .domain-title-edit, .domain-description-edit { 
+        flex: 1; 
+        padding: 8px; 
+        border: 1px solid #ddd; 
+        border-radius: 4px; 
+      }
+      .domain-name { 
+        font-weight: bold; 
+        color: #2c3e50; 
+        min-width: 120px; 
+      }
+      .existing-domain-setting { 
+        background: white; 
+        padding: 10px; 
+        border-radius: 4px; 
+        margin-bottom: 10px; 
+      }
+    </style>
+  `;
+}

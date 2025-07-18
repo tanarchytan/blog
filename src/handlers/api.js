@@ -5,6 +5,7 @@ import { getCorsHeaders } from '../utils/security.js';
 import { validateSlug } from '../utils/validation.js';
 import { createSuccessResponse, createErrorResponse, handleApiError } from '../utils/apiHelpers.js';
 import { createPost, updatePost, deletePost } from './postOperations.js';
+import { getSettings, saveSettings } from '../utils/settings.js';
 
 export async function handleAPI(request, env, path) {
   const corsHeaders = getCorsHeaders();
@@ -13,8 +14,14 @@ export async function handleAPI(request, env, path) {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Authentication check
-  const requiresAuth = !(path === '/api/posts' && request.method === 'GET');
+  // Authentication check - exclude public endpoints
+  const publicEndpoints = [
+    '/api/posts',
+    '/api/test'
+  ];
+  
+  const requiresAuth = !(publicEndpoints.includes(path) && request.method === 'GET');
+  
   if (requiresAuth) {
     const authResult = await checkAdminAuth(request, env);
     if (!authResult.authenticated) {
@@ -36,27 +43,32 @@ export async function handleAPI(request, env, path) {
 async function routeRequest(request, env, path) {
   const method = request.method;
   
-  // GET /api/posts
-  if (path === '/api/posts' && method === 'GET') {
-    return handleGetPosts(env);
+  // Settings endpoints
+  if (path === '/api/settings') {
+    if (method === 'GET') return handleGetSettings(env);
+    if (method === 'POST') return handlePostSettings(request, env);
   }
 
-  // POST /api/posts
-  if (path === '/api/posts' && method === 'POST') {
-    return createPost(request, env);
+  // Posts endpoints
+  if (path === '/api/posts') {
+    if (method === 'GET') return handleGetPosts(env);
+    if (method === 'POST') return createPost(request, env);
   }
 
-  // DELETE /api/posts/{slug}
-  if (path.startsWith('/api/posts/') && method === 'DELETE') {
-    return handleDeletePost(request, env, path);
+  // Individual post endpoints
+  if (path.startsWith('/api/posts/')) {
+    const slug = path.replace('/api/posts/', '');
+    const slugValidation = validateSlug(slug);
+    
+    if (!slugValidation.isValid) {
+      return createErrorResponse(slugValidation.error, 400);
+    }
+    
+    if (method === 'DELETE') return deletePost(request, env, slug);
+    if (method === 'PUT') return updatePost(request, env, slug);
   }
 
-  // PUT /api/posts/{slug}
-  if (path.startsWith('/api/posts/') && method === 'PUT') {
-    return handleUpdatePost(request, env, path);
-  }
-
-  // POST /api/upload
+  // Upload endpoint
   if (path === '/api/upload' && method === 'POST') {
     return handleImageUpload(request, env);
   }
@@ -66,7 +78,7 @@ async function routeRequest(request, env, path) {
     return handleDebugEndpoints(request, env, path);
   }
 
-  // System test
+  // System test endpoint
   if (path === '/api/test' && method === 'GET') {
     return handleSystemTest(env);
   }
@@ -74,6 +86,37 @@ async function routeRequest(request, env, path) {
   return createErrorResponse('API endpoint not found', 404);
 }
 
+// Settings handlers
+async function handleGetSettings(env) {
+  try {
+    const settings = await getSettings(env);
+    return createSuccessResponse(settings);
+  } catch (error) {
+    return handleApiError('get settings', error);
+  }
+}
+
+async function handlePostSettings(request, env) {
+  try {
+    const settings = await request.json();
+    
+    if (!settings || typeof settings !== 'object') {
+      return createErrorResponse('Invalid settings data', 400);
+    }
+    
+    const result = await saveSettings(env, settings);
+    
+    if (result.success) {
+      return createSuccessResponse({ success: true });
+    } else {
+      return createErrorResponse(result.error, 500);
+    }
+  } catch (error) {
+    return handleApiError('save settings', error);
+  }
+}
+
+// Posts handlers
 async function handleGetPosts(env) {
   try {
     const posts = await getAllPosts(env);
@@ -83,58 +126,43 @@ async function handleGetPosts(env) {
   }
 }
 
-async function handleDeletePost(request, env, path) {
-  const slug = path.replace('/api/posts/', '');
-  const slugValidation = validateSlug(slug);
-  
-  if (!slugValidation.isValid) {
-    return createErrorResponse(slugValidation.error, 400);
-  }
-  
-  return deletePost(request, env, slug);
-}
-
-async function handleUpdatePost(request, env, path) {
-  const slug = path.replace('/api/posts/', '');
-  const slugValidation = validateSlug(slug);
-  
-  if (!slugValidation.isValid) {
-    return createErrorResponse(slugValidation.error, 400);
-  }
-  
-  return updatePost(request, env, slug);
-}
-
+// Debug endpoints handler
 async function handleDebugEndpoints(request, env, path) {
   const method = request.method;
   
-  if (path === '/api/debug/security' && method === 'GET') {
-    return createSuccessResponse({
-      nonPersistentSessions: true,
-      browserFingerprinting: true,
-      sessionTimeout: '8-hours',
-      corsProtection: true,
-      securityHeaders: true,
-      xssProtection: true,
-      sessionValidation: 'strict',
-      userAgentValidation: true,
-      auditLogging: true
-    });
-  }
-
-  if (path === '/api/debug/session' && method === 'GET') {
-    return handleSessionDebug(request, env);
-  }
-
-  if (path === '/api/debug/performance' && method === 'GET') {
-    return handlePerformanceDebug();
-  }
-
-  if (path === '/api/debug/clear-sessions' && method === 'POST') {
-    return handleClearSessions(request, env);
+  switch (path) {
+    case '/api/debug/security':
+      if (method === 'GET') return handleSecurityDebug();
+      break;
+      
+    case '/api/debug/session':
+      if (method === 'GET') return handleSessionDebug(request, env);
+      break;
+      
+    case '/api/debug/performance':
+      if (method === 'GET') return handlePerformanceDebug(env);
+      break;
+      
+    case '/api/debug/clear-sessions':
+      if (method === 'POST') return handleClearSessions(request, env);
+      break;
   }
 
   return createErrorResponse('Debug endpoint not found', 404);
+}
+
+async function handleSecurityDebug() {
+  return createSuccessResponse({
+    nonPersistentSessions: true,
+    browserFingerprinting: true,
+    sessionTimeout: '8-hours',
+    corsProtection: true,
+    securityHeaders: true,
+    xssProtection: true,
+    sessionValidation: 'strict',
+    userAgentValidation: true,
+    auditLogging: true
+  });
 }
 
 async function handleSessionDebug(request, env) {
@@ -158,17 +186,19 @@ async function handleSessionDebug(request, env) {
   }
 }
 
-async function handlePerformanceDebug() {
+async function handlePerformanceDebug(env) {
   try {
     const startTime = Date.now();
     
-    // Simple performance test
-    await new Promise(resolve => setTimeout(resolve, 1));
+    // Test KV performance
+    await env.BLOG_POSTS.put('perf-test', 'test-value');
+    const testValue = await env.BLOG_POSTS.get('perf-test');
+    await env.BLOG_POSTS.delete('perf-test');
     
     const responseTime = Date.now() - startTime;
     
     return createSuccessResponse({
-      kvOps: 'Healthy',
+      kvOps: testValue === 'test-value' ? 'Healthy' : 'Failed',
       r2Ops: 'Healthy',
       memory: 'Within limits',
       requests: 'Normal',
@@ -211,13 +241,21 @@ async function handleSystemTest(env) {
     await env.BLOG_POSTS.put('test-key', 'test-value');
     const kvValue = await env.BLOG_POSTS.get('test-key');
     
-    // Test R2 operations
-    const testFile = new File(['test'], 'test.txt', { type: 'text/plain' });
-    await env.R2_BUCKET.put('test-file.txt', testFile);
-    const r2Object = await env.R2_BUCKET.get('test-file.txt');
+    // Test R2 operations (if R2 is available)
+    let r2Test = false;
+    try {
+      if (env.R2_BUCKET) {
+        const testFile = new File(['test'], 'test.txt', { type: 'text/plain' });
+        await env.R2_BUCKET.put('test-file.txt', testFile);
+        const r2Object = await env.R2_BUCKET.get('test-file.txt');
+        r2Test = !!r2Object;
+        await env.R2_BUCKET.delete('test-file.txt');
+      }
+    } catch (r2Error) {
+      console.error('R2 test failed:', r2Error);
+    }
     
-    // Cleanup
-    await env.R2_BUCKET.delete('test-file.txt');
+    // Cleanup KV test
     await env.BLOG_POSTS.delete('test-key');
 
     // Gather system info
@@ -233,7 +271,7 @@ async function handleSystemTest(env) {
       kvBinding: !!env.BLOG_POSTS,
       kvTest: kvValue === 'test-value',
       r2Binding: !!env.R2_BUCKET,
-      r2Test: !!r2Object,
+      r2Test: r2Test,
       accountId: !!env.CLOUDFLARE_ACCOUNT_ID,
       adminPassword: !!env.ADMIN_PANEL_PASSWORD,
       totalPosts: postCount,
@@ -257,6 +295,7 @@ async function countActiveSessions(env) {
     const list = await env.BLOG_POSTS.list({ prefix: 'session_' });
     return list.keys.length;
   } catch (error) {
+    console.error('Count sessions error:', error);
     return 0;
   }
 }
@@ -266,6 +305,7 @@ async function getRecentSecurityEvents(env) {
     const list = await env.BLOG_POSTS.list({ prefix: 'security_' });
     return list.keys.length;
   } catch (error) {
+    console.error('Count security events error:', error);
     return 0;
   }
 }
@@ -277,9 +317,12 @@ async function countTotalPosts(env) {
       !key.name.startsWith('image_') && 
       !key.name.startsWith('session_') && 
       !key.name.startsWith('security_') &&
-      key.name !== 'test-key'
+      !key.name.startsWith('blog_') &&
+      key.name !== 'test-key' &&
+      key.name !== 'perf-test'
     ).length;
   } catch (error) {
+    console.error('Count posts error:', error);
     return 0;
   }
 }
