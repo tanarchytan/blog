@@ -10,7 +10,7 @@ import {
   loadPosts, 
   loadStats, 
   loadDebugInfo 
-} from '../utils/adminutils.js';
+} from '../utils/adminUtils.js';
 
 import { 
   createPostFormTemplate, 
