@@ -1,15 +1,12 @@
 import { handleAPI } from './handlers/api.js';
 import { handleImageServing } from './handlers/image.js';
-import { handlePost } from './handlers/post.js';
+import { handlePost, getBlogHomePage } from './handlers/post.js';
 import { 
   handleAdminPanel, 
   handleAdminLogin, 
   handleAdminLogout,
-  handleAdminCreate,
-  handleAdminEdit,
   handleAdminEditPost
 } from './handlers/admin.js';
-import { getBlogHomePage } from './handlers/post.js';
 import { getBasicSecurityHeaders } from './utils/security.js';
 
 export default {
@@ -43,16 +40,15 @@ export default {
       return handlePost(request, env, path);
     }
 
+    // Admin panel routes - consolidated handling
     if (path === '/verysecretadminpanel') {
       return handleAdminPanel(request, env);
     }
 
-    if (path === '/verysecretadminpanel/create') {
-      return handleAdminCreate(request, env);
-    }
-
-    if (path === '/verysecretadminpanel/edit') {
-      return handleAdminEdit(request, env);
+    if (path === '/verysecretadminpanel/create' || path === '/verysecretadminpanel/edit') {
+      // Redirect to main admin panel with appropriate tab
+      const tab = path.includes('/create') ? 'create' : 'edit';
+      return Response.redirect(`/verysecretadminpanel?tab=${tab}`, 302);
     }
 
     if (path.startsWith('/verysecretadminpanel/edit/')) {
@@ -68,11 +64,14 @@ export default {
     }
 
     if (path === '/' || path === '') {
-      return new Response(getBlogHomePage(), {
+      return new Response(getBlogHomePage(request), {
         headers: getBasicSecurityHeaders()
       });
     }
 
-    return new Response('Page not found', { status: 404 });
+    return new Response('Page not found', { 
+      status: 404,
+      headers: getBasicSecurityHeaders()
+    });
   }
 };
