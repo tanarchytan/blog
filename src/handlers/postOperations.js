@@ -1,6 +1,6 @@
 import { generateSlug } from './post.js';
 import { validatePostData } from '../utils/validation.js';
-import { createSuccessResponse, createErrorResponse, createValidationErrorResponse } from '../utils/apiHelpers.js';
+import { createSuccessResponse, createErrorResponse, createValidationErrorResponse, createConflictResponse, createNotFoundResponse, handleApiError } from '../utils/apiHelpers.js';
 
 export async function createPost(request, env) {
   try {
@@ -14,13 +14,14 @@ export async function createPost(request, env) {
     
     const slug = generateSlug(post.title);
     
+    if (!slug) {
+      return createErrorResponse('Could not generate valid slug from title', 400);
+    }
+    
     // Check for duplicate slug
     const existingPost = await env.BLOG_POSTS.get(slug);
     if (existingPost) {
-      return createErrorResponse({ 
-        error: 'A post with this title already exists',
-        conflictingSlug: slug 
-      }, 409);
+      return createConflictResponse('A post with this title already exists', { slug });
     }
     
     const postData = {
@@ -32,6 +33,15 @@ export async function createPost(request, env) {
     };
     
     await env.BLOG_POSTS.put(slug, JSON.stringify(postData));
+    
+    // Log the creation for audit purposes
+    await env.BLOG_POSTS.put(`security_create_${Date.now()}`, JSON.stringify({
+      timestamp: new Date().toISOString(),
+      action: 'post_created',
+      slug: slug,
+      title: post.title.substring(0, 100), // Truncate for logging
+      ipAddress: request.headers.get('CF-Connecting-IP') || 'unknown'
+    }), { expirationTtl: 604800 });
     
     return createSuccessResponse({ success: true, slug });
   } catch (error) {
@@ -51,10 +61,14 @@ export async function updatePost(request, env, slug) {
     
     const newSlug = generateSlug(post.title);
     
+    if (!newSlug) {
+      return createErrorResponse('Could not generate valid slug from title', 400);
+    }
+    
     // Get existing post
     const existingPost = await env.BLOG_POSTS.get(slug);
     if (!existingPost) {
-      return createErrorResponse('Post not found', 404);
+      return createNotFoundResponse('Post not found');
     }
     
     const existingData = JSON.parse(existingPost);
@@ -71,10 +85,7 @@ export async function updatePost(request, env, slug) {
     if (slug !== newSlug) {
       const conflictingPost = await env.BLOG_POSTS.get(newSlug);
       if (conflictingPost) {
-        return createErrorResponse({ 
-          error: 'A post with this title already exists',
-          conflictingSlug: newSlug 
-        }, 409);
+        return createConflictResponse('A post with this title already exists', { slug: newSlug });
       }
       await env.BLOG_POSTS.delete(slug);
     }
@@ -87,6 +98,7 @@ export async function updatePost(request, env, slug) {
       action: 'post_updated',
       oldSlug: slug,
       newSlug: newSlug,
+      title: post.title.substring(0, 100),
       ipAddress: request.headers.get('CF-Connecting-IP') || 'unknown'
     }), { expirationTtl: 604800 });
     
@@ -101,14 +113,17 @@ export async function deletePost(request, env, slug) {
     // Check if post exists
     const existingPost = await env.BLOG_POSTS.get(slug);
     if (!existingPost) {
-      return createErrorResponse('Post not found', 404);
+      return createNotFoundResponse('Post not found');
     }
+    
+    const postData = JSON.parse(existingPost);
     
     // Log the deletion for audit purposes
     await env.BLOG_POSTS.put(`security_delete_${Date.now()}`, JSON.stringify({
       timestamp: new Date().toISOString(),
       action: 'post_deleted',
       slug: slug,
+      title: postData.title?.substring(0, 100) || 'Unknown',
       ipAddress: request.headers.get('CF-Connecting-IP') || 'unknown'
     }), { expirationTtl: 604800 });
     

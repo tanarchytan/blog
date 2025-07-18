@@ -64,7 +64,7 @@ export default {
     }
 
     if (path === '/' || path === '') {
-      return new Response(getBlogHomePage(request), {
+      return new Response(await getBlogHomePage(request, env), {
         headers: getBasicSecurityHeaders()
       });
     }

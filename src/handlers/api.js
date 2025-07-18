@@ -2,8 +2,8 @@ import { checkAdminAuth } from '../utils/auth.js';
 import { getAllPosts } from './post.js';
 import { handleImageUpload } from './image.js';
 import { getCorsHeaders } from '../utils/security.js';
-import { validateSlug } from '../utils/validation.js';
-import { createSuccessResponse, createErrorResponse, handleApiError } from '../utils/apiHelpers.js';
+import { validateSlug, validateSettings } from '../utils/validation.js';
+import { createSuccessResponse, createErrorResponse, handleApiError, createAuthErrorResponse } from '../utils/apiHelpers.js';
 import { createPost, updatePost, deletePost } from './postOperations.js';
 import { getSettings, saveSettings } from '../utils/settings.js';
 
@@ -25,10 +25,7 @@ export async function handleAPI(request, env, path) {
   if (requiresAuth) {
     const authResult = await checkAdminAuth(request, env);
     if (!authResult.authenticated) {
-      return createErrorResponse({ 
-        error: 'Authentication required',
-        reason: authResult.reason || 'invalid_session'
-      }, 401);
+      return createAuthErrorResponse(authResult.reason);
     }
   }
 
@@ -100,8 +97,12 @@ async function handlePostSettings(request, env) {
   try {
     const settings = await request.json();
     
-    if (!settings || typeof settings !== 'object') {
-      return createErrorResponse('Invalid settings data', 400);
+    const validation = validateSettings(settings);
+    if (!validation.isValid) {
+      return createErrorResponse({ 
+        error: 'Invalid settings data',
+        details: validation.errors 
+      }, 400);
     }
     
     const result = await saveSettings(env, settings);
@@ -169,10 +170,7 @@ async function handleSessionDebug(request, env) {
   try {
     const authResult = await checkAdminAuth(request, env);
     if (!authResult.authenticated) {
-      return createErrorResponse({ 
-        error: 'Not authenticated',
-        reason: authResult.reason || 'invalid_session'
-      }, 401);
+      return createAuthErrorResponse(authResult.reason);
     }
 
     const session = await env.BLOG_POSTS.get(`session_${authResult.sessionToken}`);

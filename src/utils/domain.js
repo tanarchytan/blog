@@ -1,4 +1,4 @@
-import { getSettings, getBlogTitleForDomain } from './settings.js';
+import { getSettings, getBlogTitleForDomain, getBlogDescriptionForDomain } from './settings.js';
 
 /**
  * Extract domain information from request

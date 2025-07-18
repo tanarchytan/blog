@@ -1,4 +1,4 @@
-// Add this to your adminTabs.js file
+// Add this function to your existing adminTabs.js file
 
 export function getSettingsTab() {
   return `
@@ -71,7 +71,9 @@ export function getSettingsTab() {
       // Load current settings
       async function loadSettings() {
         try {
-          const response = await fetch('/api/settings');
+          const response = await fetch('/api/settings', {
+            credentials: 'include'
+          });
           currentSettings = await response.json();
           populateSettings(currentSettings);
         } catch (error) {
@@ -205,7 +207,7 @@ export function getSettingsTab() {
           const response = await fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
+            credentials: 'include',
             body: JSON.stringify(currentSettings)
           });
           

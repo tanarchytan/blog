@@ -34,3 +34,23 @@ export async function handleApiError(operation, error) {
     details: error.message
   });
 }
+
+export function createAuthErrorResponse(reason = 'invalid_session') {
+  return createErrorResponse({ 
+    error: 'Authentication required',
+    reason: reason
+  }, 401);
+}
+
+export function createNotFoundResponse(message = 'Resource not found') {
+  return createErrorResponse(message, 404);
+}
+
+export function createConflictResponse(message, conflictData = null) {
+  const errorData = { error: message };
+  if (conflictData) {
+    errorData.conflict = conflictData;
+  }
+  
+  return createErrorResponse(errorData, 409);
+}
