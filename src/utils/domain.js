@@ -1,8 +1,5 @@
-import { getSettings, getBlogTitleForDomain, getBlogDescriptionForDomain } from './settings.js';
+import { getSettings, getBlogTitleForDomain, getBlogDescriptionForDomain, getBlogAuthorForDomain } from './settings.js';
 
-/**
- * Extract domain information from request
- */
 export function getDomainInfo(request) {
   const url = new URL(request.url);
   
@@ -15,18 +12,12 @@ export function getDomainInfo(request) {
   };
 }
 
-/**
- * Generate absolute URL for the current domain
- */
 export function getAbsoluteUrl(request, path = '') {
   const { origin } = getDomainInfo(request);
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   return `${origin}${cleanPath}`;
 }
 
-/**
- * Generate domain-appropriate cookie settings
- */
 export function getCookieSettings(request) {
   const { hostname, isSecure, isDevelopment } = getDomainInfo(request);
   
@@ -39,9 +30,6 @@ export function getCookieSettings(request) {
   };
 }
 
-/**
- * Generate blog title based on settings and domain - fully dynamic
- */
 export async function getBlogTitle(request, env) {
   const { hostname } = getDomainInfo(request);
   
@@ -50,14 +38,10 @@ export async function getBlogTitle(request, env) {
     return getBlogTitleForDomain(settings, hostname);
   } catch (error) {
     console.error('Error getting blog title:', error);
-    // Dynamic fallback based on hostname instead of hardcoded
     return `${hostname.charAt(0).toUpperCase() + hostname.slice(1)} Blog`;
   }
 }
 
-/**
- * Generate blog description based on settings and domain
- */
 export async function getBlogDescription(request, env) {
   const { hostname } = getDomainInfo(request);
   
@@ -66,13 +50,18 @@ export async function getBlogDescription(request, env) {
     return getBlogDescriptionForDomain(settings, hostname);
   } catch (error) {
     console.error('Error getting blog description:', error);
-    return 'A technology and cybersecurity blog'; // Generic fallback
+    return 'A technology and cybersecurity blog';
   }
 }
 
-/**
- * Synchronous version for cases where env is not available
- */
-export function getBlogTitleSync(hostname) {
-  return `${hostname.charAt(0).toUpperCase() + hostname.slice(1)} Blog`;
+export async function getBlogAuthor(request, env) {
+  const { hostname } = getDomainInfo(request);
+  
+  try {
+    const settings = await getSettings(env);
+    return getBlogAuthorForDomain(settings, hostname);
+  } catch (error) {
+    console.error('Error getting blog author:', error);
+    return 'Blog Author';
+  }
 }

@@ -1,25 +1,30 @@
-// Default blog settings
+// Default blog settings - these will be the fallbacks
 export const DEFAULT_SETTINGS = {
   blog: {
     defaultTitle: 'My Technology Blog',
     defaultDescription: 'A cybersecurity and technology blog',
-    defaultAuthor: 'Blog Author'
+    defaultAuthor: 'Blog Author',
+    defaultKeywords: 'cybersecurity, technology, blog'
   },
   domains: {
-    // Domain-specific overrides will be added dynamically through admin panel
+    // Domain-specific overrides added through admin panel
   },
   theme: {
     primaryColor: '#3498db',
-    accentColor: '#2c3e50'
+    accentColor: '#2c3e50',
+    backgroundColor: '#ffffff',
+    textColor: '#333333'
   },
   social: {
     twitter: '',
     linkedin: '',
-    github: ''
+    github: '',
+    email: ''
   },
   seo: {
-    keywords: 'cybersecurity, technology, blog',
-    ogImage: ''
+    ogImage: '',
+    favicon: '',
+    analyticsId: ''
   }
 };
 
@@ -28,11 +33,11 @@ export async function getSettings(env) {
     const settings = await env.BLOG_POSTS.get('blog_settings');
     if (settings) {
       const parsedSettings = JSON.parse(settings);
-      // Merge with defaults to ensure all properties exist
       return {
         ...DEFAULT_SETTINGS,
         ...parsedSettings,
         blog: { ...DEFAULT_SETTINGS.blog, ...parsedSettings.blog },
+        domains: { ...DEFAULT_SETTINGS.domains, ...parsedSettings.domains },
         theme: { ...DEFAULT_SETTINGS.theme, ...parsedSettings.theme },
         social: { ...DEFAULT_SETTINGS.social, ...parsedSettings.social },
         seo: { ...DEFAULT_SETTINGS.seo, ...parsedSettings.seo }
@@ -47,7 +52,6 @@ export async function getSettings(env) {
 
 export async function saveSettings(env, settings) {
   try {
-    // Validate settings structure
     const validatedSettings = {
       blog: settings.blog || DEFAULT_SETTINGS.blog,
       domains: settings.domains || {},
@@ -65,31 +69,22 @@ export async function saveSettings(env, settings) {
 }
 
 export function getBlogTitleForDomain(settings, hostname) {
-  // Check for domain-specific override first
-  if (settings.domains && settings.domains[hostname]?.title) {
+  if (settings.domains?.[hostname]?.title) {
     return settings.domains[hostname].title;
   }
-  
-  // Fallback to default from settings
-  if (settings.blog?.defaultTitle) {
-    return settings.blog.defaultTitle;
-  }
-  
-  // Final fallback - dynamic based on hostname
-  return `${hostname.charAt(0).toUpperCase() + hostname.slice(1)} Blog`;
+  return settings.blog?.defaultTitle || `${hostname.charAt(0).toUpperCase() + hostname.slice(1)} Blog`;
 }
 
 export function getBlogDescriptionForDomain(settings, hostname) {
-  // Check for domain-specific override first
-  if (settings.domains && settings.domains[hostname]?.description) {
+  if (settings.domains?.[hostname]?.description) {
     return settings.domains[hostname].description;
   }
-  
-  // Fallback to default from settings
-  if (settings.blog?.defaultDescription) {
-    return settings.blog.defaultDescription;
+  return settings.blog?.defaultDescription || 'A technology and cybersecurity blog';
+}
+
+export function getBlogAuthorForDomain(settings, hostname) {
+  if (settings.domains?.[hostname]?.author) {
+    return settings.domains[hostname].author;
   }
-  
-  // Final fallback
-  return 'A technology and cybersecurity blog';
+  return settings.blog?.defaultAuthor || 'Blog Author';
 }
